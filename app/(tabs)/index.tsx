@@ -39,7 +39,7 @@ export default function HomeScreen() {
       <ThemedView style={styles.stepContainer}>
         <Link href="/modal">
           <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explorar78910</ThemedText>
+            <ThemedText type="subtitle">Step 2: Explorar7891000</ThemedText>
           </Link.Trigger>
           <Link.Preview />
           <Link.Menu>
@@ -59,7 +59,7 @@ export default function HomeScreen() {
             </Link.Menu>
           </Link.Menu>
         </Link>
-
+        
         <ThemedText>
           {`Tap the Explore tab to learn more about what's included in this starter app.`}
         </ThemedText>
@@ -74,9 +74,13 @@ export default function HomeScreen() {
           <ThemedText type="defaultSemiBold">app-example</ThemedText>.
         </ThemedText>
       </ThemedView>
+            
+      
     </ParallaxScrollView>
+    
   );
 }
+
 
 const styles = StyleSheet.create({
   titleContainer: {
