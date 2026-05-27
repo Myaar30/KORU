@@ -5,47 +5,86 @@ import React, { useCallback, useContext, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 
-const COLORES = { fondo: '#0B1120', cards: '#1E293B', botonPrincipal: '#8B5CF6', interactivo: '#06B6D4', textoPrincipal: '#F8FAFC', textoSecundario: '#CBD5E1', exito: '#10B981', peligro: '#EF4444', alerta: '#F59E0B', borde: '#334155' };
+const COLORES = { 
+  fondo: '#0B1120', cards: '#1E293B', botonPrincipal: '#8B5CF6', 
+  interactivo: '#06B6D4', textoPrincipal: '#F8FAFC', textoSecundario: '#CBD5E1', 
+  exito: '#10B981', peligro: '#EF4444', alerta: '#F59E0B', borde: '#334155'
+};
 
 const GestionEquipo = ({ dataPuente, volver }) => {
   const { usuarioActivo } = useContext(AuthContext);
+  
   const [equipoBD, setEquipoBD] = useState(null);
   const [integrantes, setIntegrantes] = useState([]);
   const [postulaciones, setPostulaciones] = useState([]); 
   const [sugerencias, setSugerencias] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [reclutamientoAbierto, setReclutamientoAbierto] = useState(false);
+  
   const [modoConfiguracion, setModoConfiguracion] = useState(false);
   const [verAsistencia, setVerAsistencia] = useState(false);
   const [editandoInfo, setEditandoInfo] = useState(false);
   
-  const [formDesc, setFormDesc] = useState(''); const [formNivel, setFormNivel] = useState(''); const [formAmbiente, setFormAmbiente] = useState(''); const [formObjetivos, setFormObjetivos] = useState(''); const [formReq, setFormReq] = useState('');
-  const [busquedaUsuario, setBusquedaUsuario] = useState(''); const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
+  const [formDesc, setFormDesc] = useState('');
+  const [formNivel, setFormNivel] = useState('');
+  const [formAmbiente, setFormAmbiente] = useState('');
+  const [formObjetivos, setFormObjetivos] = useState('');
+  const [formReq, setFormReq] = useState('');
 
-  const soyCapitan = dataPuente.es_capitan === 1;
-  const soyTitular = dataPuente.rol_equipo === 'Titular';
+  const [busquedaUsuario, setBusquedaUsuario] = useState('');
+  const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
+
+  // FIX: Agregamos ?. para evitar el error 'id' of null al desmontar la vista
+  const soyCapitan = dataPuente?.es_capitan === 1;
+  const soyTitular = dataPuente?.rol_equipo === 'Titular';
   
-  // Extraemos nuestra asistencia actual desde la lista de integrantes recargada
-  const miDatosEnEquipo = integrantes.find(i => i.jugador_id === usuarioActivo.id);
+  const miDatosEnEquipo = integrantes.find(i => i.jugador_id === usuarioActivo?.id);
   const miAsistencia = miDatosEnEquipo ? miDatosEnEquipo.asistencia_torneo : 'Pendiente';
 
   const cargarDatos = async () => {
+    // FIX: Si dataPuente ya es null (porque nos estamos yendo de la pantalla), abortamos la carga
+    if (!dataPuente?.id) return;
+
     try {
       const db = await SQLite.openDatabaseAsync('koru.db');
+      
       const equipo = await db.getFirstAsync('SELECT * FROM Equipo WHERE id = ?', [dataPuente.id]);
       if (equipo) {
-        setEquipoBD(equipo); setReclutamientoAbierto(equipo.reclutamientoAbierto === 1);
+        setEquipoBD(equipo);
+        setReclutamientoAbierto(equipo.reclutamientoAbierto === 1);
+        setFormDesc(equipo.descripcion || '');
+        setFormNivel(equipo.nivel || '');
+        setFormAmbiente(equipo.ambiente || '');
+        setFormObjetivos(equipo.objetivos || '');
+        setFormReq(equipo.requisitos || '');
       }
-      const jugadores = await db.getAllAsync(`SELECT p.id AS jugador_id, p.nombre, p.rolPrimario, je.rol_equipo, je.es_capitan, je.asistencia_torneo FROM Perfil p JOIN Jugador_Equipo je ON p.id = je.usuario_id WHERE je.equipo_id = ?`, [dataPuente.id]);
+
+      const queryJugadores = `
+        SELECT p.id AS jugador_id, p.nombre, p.rolPrimario, je.rol_equipo, je.es_capitan, je.asistencia_torneo 
+        FROM Perfil p JOIN Jugador_Equipo je ON p.id = je.usuario_id WHERE je.equipo_id = ?
+      `;
+      const jugadores = await db.getAllAsync(queryJugadores, [dataPuente.id]);
       setIntegrantes(jugadores);
 
       if (soyCapitan) {
-        setPostulaciones(await db.getAllAsync(`SELECT p.*, u.nombre FROM Postulacion p JOIN Perfil u ON p.usuario_id = u.id WHERE p.equipo_id = ? AND p.estado = 'Pendiente'`, [dataPuente.id]));
-        setSugerencias(await db.getAllAsync(`SELECT s.*, p.nombre as sugerido_nombre, p.rolPrimario, sgr.nombre as sugeridor_nombre FROM Sugerencia s JOIN Perfil p ON s.sugerido_id = p.id JOIN Perfil sgr ON s.sugeridor_id = sgr.id WHERE s.equipo_id = ? AND s.estado = 'Pendiente'`, [dataPuente.id]));
+        const solicitudes = await db.getAllAsync(`SELECT p.*, u.nombre FROM Postulacion p JOIN Perfil u ON p.usuario_id = u.id WHERE p.equipo_id = ? AND p.estado = 'Pendiente'`, [dataPuente.id]);
+        setPostulaciones(solicitudes);
+
+        const sugs = await db.getAllAsync(`
+          SELECT s.*, p.nombre as sugerido_nombre, p.rolPrimario, sgr.nombre as sugeridor_nombre 
+          FROM Sugerencia s JOIN Perfil p ON s.sugerido_id = p.id JOIN Perfil sgr ON s.sugeridor_id = sgr.id 
+          WHERE s.equipo_id = ? AND s.estado = 'Pendiente'
+        `, [dataPuente.id]);
+        setSugerencias(sugs);
       }
-    } catch (error) { console.error(error); } finally { setCargando(false); }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCargando(false);
+    }
   };
-  useFocusEffect(useCallback(() => { cargarDatos(); }, [dataPuente.id]));
+
+  useFocusEffect(useCallback(() => { cargarDatos(); }, [dataPuente?.id]));
 
   // ==========================================
   // CONFIRMACIÓN DE ASISTENCIA IRREVERSIBLE
@@ -93,13 +132,29 @@ const GestionEquipo = ({ dataPuente, volver }) => {
   const confirmarBorrarEquipo = () => { Alert.alert("Eliminar", `¿Disolver "${equipoBD?.nombre}"?`, [{ text: "Cancelar", style: "cancel" }, { text: "Sí", style: "destructive", onPress: async () => { const db = await SQLite.openDatabaseAsync('koru.db'); await db.runAsync('DELETE FROM Equipo WHERE id = ?', [equipoBD.id]); await db.runAsync('DELETE FROM Jugador_Equipo WHERE equipo_id = ?', [equipoBD.id]); volver(); }}]); };
   const aceptarJugador = async (postulacion) => { if (integrantes.length >= 5) return Alert.alert("Equipo Lleno", "Límite de 5."); const db = await SQLite.openDatabaseAsync('koru.db'); await db.runAsync("UPDATE Postulacion SET estado = 'Aceptada' WHERE id = ?", [postulacion.id]); await db.runAsync("INSERT INTO Jugador_Equipo (usuario_id, equipo_id, rol_equipo) VALUES (?, ?, 'Suplente')", [postulacion.usuario_id, equipoBD.id]); cargarDatos(); };
   const rechazarJugador = (post) => { Alert.alert("Rechazar", `¿Rechazar a ${post.nombre}?`, [{ text: "Cancelar", style: "cancel" }, { text: "Sí", style: "destructive", onPress: async () => { const db = await SQLite.openDatabaseAsync('koru.db'); await db.runAsync("UPDATE Postulacion SET estado = 'Rechazada' WHERE id = ?", [post.id]); cargarDatos(); }}]); };
+  
   const buscarUsuarios = async () => { if (busquedaUsuario.trim() === '') return; const db = await SQLite.openDatabaseAsync('koru.db'); setResultadosBusqueda(await db.getAllAsync(`SELECT * FROM Perfil WHERE nombre LIKE ? AND juegoPrincipal = ? AND id NOT IN (SELECT usuario_id FROM Jugador_Equipo WHERE equipo_id = ?)`, [`%${busquedaUsuario}%`, equipoBD.juego, equipoBD.id])); };
   const sugerirJugador = async (jugador) => { Alert.alert("Sugerir", `¿Recomendar a ${jugador.nombre}?`, [{ text: "Cancelar", style: "cancel" }, { text: "Sí", onPress: async () => { const db = await SQLite.openDatabaseAsync('koru.db'); const existe = await db.getFirstAsync("SELECT * FROM Sugerencia WHERE sugerido_id = ? AND equipo_id = ? AND estado = 'Pendiente'", [jugador.id, equipoBD.id]); if (existe) return Alert.alert("Aviso", "Ya sugerido."); await db.runAsync("INSERT INTO Sugerencia (equipo_id, sugeridor_id, sugerido_id) VALUES (?, ?, ?)", [equipoBD.id, usuarioActivo.id, jugador.id]); Alert.alert("Éxito", "Sugerencia enviada."); setResultadosBusqueda([]); setBusquedaUsuario(''); }}]); };
+  
+  // FIX: Función real para que el capitán agregue jugadores directamente desde el buscador
+  const invitarJugadorDirecto = async (jugador) => {
+    if (integrantes.length >= 5) return Alert.alert("Equipo Lleno", "Límite de 5 integrantes.");
+    Alert.alert("Invitar", `¿Añadir a ${jugador.nombre} como suplente?`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sí, añadir", onPress: async () => {
+          const db = await SQLite.openDatabaseAsync('koru.db');
+          await db.runAsync("INSERT INTO Jugador_Equipo (usuario_id, equipo_id, rol_equipo) VALUES (?, ?, 'Suplente')", [jugador.id, equipoBD.id]);
+          Alert.alert("Éxito", "Jugador añadido al equipo.");
+          setResultadosBusqueda([]); setBusquedaUsuario('');
+          cargarDatos();
+      }}
+    ]);
+  };
+
   const responderSugerencia = async (sugerenciaId, jugadorId, accion) => { const db = await SQLite.openDatabaseAsync('koru.db'); await db.runAsync("UPDATE Sugerencia SET estado = ? WHERE id = ?", [accion === 'Aceptar' ? 'Aceptada' : 'Rechazada', sugerenciaId]); if (accion === 'Aceptar') { if (integrantes.length >= 5) return Alert.alert("Equipo Lleno", "No puedes aceptar más."); await db.runAsync("INSERT INTO Jugador_Equipo (usuario_id, equipo_id, rol_equipo) VALUES (?, ?, 'Suplente')", [jugadorId, equipoBD.id]); Alert.alert("Aceptado", "Jugador añadido como suplente."); } cargarDatos(); };
 
   if (cargando || !equipoBD) return <View style={styles.contenedorCentrado}><ActivityIndicator size="large" color={COLORES.botonPrincipal} /></View>;
 
-  // VALIDACIÓN DE EQUIPO COMPLETO
   const asistenTodos = integrantes.length === 5 && integrantes.every(i => i.asistencia_torneo === 'Sí');
 
   return (
@@ -126,7 +181,6 @@ const GestionEquipo = ({ dataPuente, volver }) => {
         <Text style={styles.descripcionEquipo}>{equipoBD.descripcion || 'Sin descripción detallada.'}</Text>
       </View>
 
-      {/* APARTADO TORNEO Y ASISTENCIA */}
       <View style={[styles.cardSeccion, {borderColor: COLORES.interactivo, borderWidth: 1}]}>
         <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}>
           <Ionicons name="trophy" size={24} color={COLORES.interactivo} style={{marginRight: 10}} />
@@ -134,7 +188,6 @@ const GestionEquipo = ({ dataPuente, volver }) => {
         </View>
         <Text style={{color: COLORES.textoPrincipal, fontWeight: 'bold', fontSize: 18}}>Clasificatoria KORU Fest</Text>
         
-        {/* VISTA DEL JUGADOR NO CAPITÁN */}
         {!soyCapitan && (
           <View style={{marginTop: 15}}>
             {miAsistencia !== 'Pendiente' ? (
@@ -157,7 +210,6 @@ const GestionEquipo = ({ dataPuente, volver }) => {
           </View>
         )}
 
-        {/* VISTA DEL CAPITÁN */}
         {soyCapitan && (
           <View style={{marginTop: 15}}>
             <View style={styles.contenedorEstadisticas}>
@@ -250,10 +302,15 @@ const GestionEquipo = ({ dataPuente, volver }) => {
                 <Text style={{color: COLORES.textoSecundario, fontSize: 13}}>{jugador.rol_equipo} • {jugador.rolPrimario || 'Sin rol'}</Text>
               </View>
             </View>
+            
             {modoConfiguracion && jugador.es_capitan === 0 && (
               <View style={{flexDirection: 'row', gap: 10}}>
-                <TouchableOpacity style={styles.botonAccionJugador} onPress={() => toggleRolJugador(jugador.jugador_id, jugador.nombre, jugador.rol_equipo)}><Ionicons name="swap-vertical" size={20} color={COLORES.interactivo} /></TouchableOpacity>
-                <TouchableOpacity style={[styles.botonAccionJugador, {backgroundColor: '#450A0A', borderColor: COLORES.peligro}]} onPress={() => expulsarJugador(jugador.jugador_id, jugador.nombre)}><Ionicons name="trash" size={20} color={COLORES.peligro} /></TouchableOpacity>
+                <TouchableOpacity style={styles.botonAccionJugador} onPress={() => toggleRolJugador(jugador.jugador_id, jugador.nombre, jugador.rol_equipo)}>
+                  <Ionicons name="swap-vertical" size={20} color={COLORES.interactivo} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.botonAccionJugador, {backgroundColor: '#450A0A', borderColor: COLORES.peligro}]} onPress={() => expulsarJugador(jugador.jugador_id, jugador.nombre)}>
+                  <Ionicons name="trash" size={20} color={COLORES.peligro} />
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -261,7 +318,7 @@ const GestionEquipo = ({ dataPuente, volver }) => {
 
         {(soyTitular || soyCapitan) && (
           <View style={styles.zonaEdicion}>
-            <Text style={styles.label}>{soyCapitan ? 'Invitar Jugador (Pdte.)' : 'Sugerir al Capitán'}</Text>
+            <Text style={styles.label}>{soyCapitan ? 'Invitar Jugador Directamente' : 'Sugerir al Capitán'}</Text>
             <View style={{flexDirection: 'row'}}>
               <TextInput style={[styles.input, {flex: 1, marginBottom: 0}]} placeholder="Buscar nombre..." placeholderTextColor={COLORES.textoSecundario} value={busquedaUsuario} onChangeText={setBusquedaUsuario} />
               <TouchableOpacity style={styles.botonBuscar} onPress={buscarUsuarios}><Ionicons name="search" size={20} color="white" /></TouchableOpacity>
@@ -269,7 +326,7 @@ const GestionEquipo = ({ dataPuente, volver }) => {
             {resultadosBusqueda.map(res => (
               <View key={res.id} style={styles.filaResultadoBusqueda}>
                 <Text style={{color: COLORES.textoPrincipal}}>{res.nombre}</Text>
-                <TouchableOpacity style={styles.botonAñadirMin} onPress={() => soyCapitan ? Alert.alert('Aviso', 'Func. pendiente') : sugerirJugador(res)}>
+                <TouchableOpacity style={styles.botonAñadirMin} onPress={() => soyCapitan ? invitarJugadorDirecto(res) : sugerirJugador(res)}>
                   <Ionicons name={soyCapitan ? "add" : "paper-plane"} size={18} color="white" />
                 </TouchableOpacity>
               </View>
@@ -291,8 +348,6 @@ const GestionEquipo = ({ dataPuente, volver }) => {
     </ScrollView>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   contenedorCentrado: { flex: 1, backgroundColor: COLORES.fondo, justifyContent: 'center', alignItems: 'center' },
@@ -330,9 +385,7 @@ const styles = StyleSheet.create({
   botonAñadirMin: { backgroundColor: COLORES.botonPrincipal, padding: 8, borderRadius: 8 },
   botonAccionJugador: { backgroundColor: COLORES.cards, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: COLORES.borde },
   botonAccion: { padding: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: COLORES.borde },
-  tagBoton: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#334155' },
-  tagBotonActivo: { borderColor: COLORES.botonPrincipal, backgroundColor: '#4C1D95' },
-  botonGuardar: { backgroundColor: COLORES.exito, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  botonGuardar: { backgroundColor: COLORES.exito, padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 10 }
 });
 
 export default GestionEquipo;

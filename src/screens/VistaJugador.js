@@ -4,9 +4,8 @@ import React, { useCallback, useContext, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 
-const COLORES = { fondo: '#0F172A', cards: '#1E293B', botonPrincipal: '#7C3AED', interactivo: '#22D3EE', textoPrincipal: '#FFFFFF', textoSecundario: '#94A3B8', estadoReclutando: '#10B981', estadoCerrado: '#EF4444' };
+const COLORES = { fondo: '#0B1120', cards: '#1E293B', botonPrincipal: '#8B5CF6', interactivo: '#06B6D4', textoPrincipal: '#F8FAFC', textoSecundario: '#CBD5E1', estadoReclutando: '#10B981', estadoCerrado: '#EF4444' };
 
-// AHORA RECIBE PROPS DESDE ControladorEquipo.js
 const VistaJugador = ({ misEquipos = [], limiteAlcanzado = false }) => {
   const { usuarioActivo } = useContext(AuthContext); 
   const [filtroActivo, setFiltroActivo] = useState('Todos');
@@ -19,13 +18,10 @@ const VistaJugador = ({ misEquipos = [], limiteAlcanzado = false }) => {
       const cargarDatos = async () => {
         try {
           const db = await SQLite.openDatabaseAsync('koru.db');
-          
-          // Traer todos los equipos
           const query = `SELECT Equipo.*, Perfil.nombre AS capitan_nombre FROM Equipo LEFT JOIN Perfil ON Equipo.capitan_id = Perfil.id`;
           const equipos = await db.getAllAsync(query);
           setEquiposBD(equipos);
 
-          // Traer postulaciones de este usuario
           const postulacionesBD = await db.getAllAsync(`
             SELECT p.*, e.nombre as equipo_nombre 
             FROM Postulacion p JOIN Equipo e ON p.equipo_id = e.id WHERE p.usuario_id = ?
@@ -63,7 +59,6 @@ const VistaJugador = ({ misEquipos = [], limiteAlcanzado = false }) => {
               }
               
               Alert.alert("¡Éxito!", "Postulación enviada al capitán.");
-              
               const actualizadas = await db.getAllAsync(`SELECT p.*, e.nombre as equipo_nombre FROM Postulacion p JOIN Equipo e ON p.equipo_id = e.id WHERE p.usuario_id = ?`, [usuarioActivo.id]);
               setMisPostulaciones(actualizadas);
             } catch (error) {
@@ -105,12 +100,18 @@ const VistaJugador = ({ misEquipos = [], limiteAlcanzado = false }) => {
           const colorEstado = estaReclutando ? COLORES.estadoReclutando : COLORES.estadoCerrado;
           
           const miPostulacion = misPostulaciones.find(p => p.equipo_id === equipo.id);
-          const esMiEquipo = misEquipos.some(eq => eq.id === equipo.id); // Nueva validación N:M
+          const esMiEquipo = misEquipos.some(eq => eq.id === equipo.id);
+          
+          // NUEVA VALIDACIÓN: Saber si soy el líder absoluto
+          const soyLider = equipo.capitan_id === usuarioActivo.id;
 
           let textoBoton = 'Postular al Equipo';
           let disabled = false;
 
-          if (esMiEquipo) {
+          if (soyLider) {
+            textoBoton = 'Eres líder de este equipo';
+            disabled = true;
+          } else if (esMiEquipo) {
             textoBoton = 'Ya eres parte de este equipo';
             disabled = true;
           } else if (limiteAlcanzado) {
@@ -166,10 +167,10 @@ const styles = StyleSheet.create({
   seccionResultados: { padding: 20, paddingTop: 0 },
   subtituloResultados: { color: COLORES.textoPrincipal, fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
   filaPostulacion: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORES.cards, padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#334155' },
-  cardEquipo: { backgroundColor: COLORES.cards, borderRadius: 12, padding: 20, marginBottom: 20, elevation: 3 },
+  cardEquipo: { backgroundColor: COLORES.cards, borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#334155' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   infoPrincipalHeader: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  logoMini: { width: 44, height: 44, borderRadius: 8, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: COLORES.botonPrincipal },
+  logoMini: { width: 44, height: 44, borderRadius: 8, backgroundColor: COLORES.fondo, justifyContent: 'center', alignItems: 'center', marginRight: 12, borderWidth: 1, borderColor: '#334155' },
   nombreEquipo: { color: COLORES.textoPrincipal, fontSize: 18, fontWeight: 'bold' },
   juegoEquipo: { color: COLORES.interactivo, fontSize: 14, fontWeight: '600' },
   badgeEstado: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
