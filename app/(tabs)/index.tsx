@@ -1,102 +1,279 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Eye, Filter, Heart, RotateCcw, X } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Dimensions, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Swiper from 'react-native-deck-swiper';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { MatchCard } from '../../components/MatchCard';
+import { COLORS } from '../../constants/theme';
+import { useMatchmaking } from '../../hooks/useMatchmaking';
 
-export default function HomeScreen() {
+const { width } = Dimensions.get('window');
+
+// --- NUEVO COMPONENTE: El Modal de Filtros (Tu diseño minimalista de píldoras) ---
+const MatchmakingFilter = ({ isVisible, onClose, onApply, currentFilters, resetFilter }: any) => {
+  // Estados locales para que la UI se actualice mientras tocas las opciones
+  const [localFilters, setLocalFilters] = useState(currentFilters);
+
+  // Le decimos que category y value son textos (string) y prev es any
+  const toggleFilter = (category: string, value: string) => {
+    setLocalFilters((prev: any) => ({
+      ...prev,
+      [category]: prev[category] === value ? null : value
+    }));
+  };
+
+  const handleApply = () => {
+    onApply(localFilters);
+    onClose();
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Intenta esto</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explorar7891000</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
-        
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
+    <Modal visible={isVisible} animationType="slide" transparent={true}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.filterContainer}>
+          
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterTitle}>Filtrar Búsqueda</Text>
+            <TouchableOpacity onPress={onClose}>
+              <X color={COLORS.textSecondary} size={24} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.filterScroll}>
+            {/* CATEGORÍA: ROL */}
+            <Text style={styles.filterCategoryLabel}>Rol Preferido</Text>
+            <View style={styles.pillContainer}>
+              {['Top', 'Jungle', 'Mid', 'ADC', 'Soporte', 'Duelista', 'Controlador', 'Iniciador', 'Centinela', 'Fill'].map((rol) => (
+                <TouchableOpacity 
+                  key={rol} 
+                  style={[styles.pill, localFilters.rol === rol && styles.pillActive]}
+                  onPress={() => toggleFilter('rol', rol)}
+                >
+                  <Text style={[styles.pillText, localFilters.rol === rol && styles.pillTextActive]}>{rol}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* CATEGORÍA: ESTILO DE JUEGO */}
+            <Text style={styles.filterCategoryLabel}>Estilo de Juego</Text>
+            <View style={styles.pillContainer}>
+              {['Competitivo', 'Chill', 'Tryhard', 'Casual'].map((estilo) => (
+                <TouchableOpacity 
+                  key={estilo} 
+                  style={[styles.pill, localFilters.estilo === estilo && styles.pillActive]}
+                  onPress={() => toggleFilter('estilo', estilo)}
+                >
+                  <Text style={[styles.pillText, localFilters.estilo === estilo && styles.pillTextActive]}>{estilo}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* CATEGORÍA: RANGO */}
+            <Text style={styles.filterCategoryLabel}>Rango (Mínimo)</Text>
+            <View style={styles.pillContainer}>
+              {['Plata / Oro', 'Platino / Esmeralda', 'Diamante / Master', 'Inmortal / Radiante'].map((rango) => (
+                <TouchableOpacity 
+                  key={rango} 
+                  style={[styles.pill, localFilters.rango === rango && styles.pillActive]}
+                  onPress={() => toggleFilter('rango', rango)}
+                >
+                  <Text style={[styles.pillText, localFilters.rango === rango && styles.pillTextActive]}>{rango}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={styles.filterFooter}>
+            <TouchableOpacity 
+              style={styles.clearButton} 
+              onPress={() => {
+                setLocalFilters({ rol: null, estilo: null, rango: null, juego: null });
+                resetFilter();
+                onClose();
+              }}
+            >
+              <Text style={styles.clearButtonText}>Limpiar</Text>
+            </TouchableOpacity>
             
-      
-    </ParallaxScrollView>
-    
+            <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+              <Text style={styles.applyButtonText}>Aplicar Filtros</Text>
+            </TouchableOpacity>
+          </View>
+
+        </View>
+      </View>
+    </Modal>
+  );
+};
+// --- FIN DEL COMPONENTE DEL MODAL ---
+
+
+export default function MatchScreen() {
+  const { 
+    currentProfile, PLAYER_PROFILES, swiperRef, handleNextProfile, 
+    isQueueEmpty, resetFilter, isLoading, 
+    filtrosActivos, setFiltrosActivos
+  } = useMatchmaking();
+
+  const router = useRouter();
+
+  const [modalFiltroVisible, setModalFiltroVisible] = useState(false);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.emptyContainer]}>
+        <ActivityIndicator size="large" color={COLORS.blue} />
+        <Text style={[styles.emptyText, { marginTop: 15 }]}>Sincronizando Base de Datos...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (isQueueEmpty) {
+    return (
+      <SafeAreaView style={[styles.container, styles.emptyContainer]}>
+        <Text style={styles.emptyText}>No hay más jugadores disponibles por ahora</Text>
+        <TouchableOpacity style={styles.resetDemoButton} onPress={resetFilter}>
+          <Text style={styles.resetDemoText}>Reiniciar Búsqueda</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerIconButton} onPress={resetFilter}>
+          <RotateCcw color={COLORS.textSecondary} size={24} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>MATCHMAKING</Text>
+          <Text style={styles.headerSubtitle}>Encuentra tu próximo dúo</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.headerIconButton} 
+          onPress={() => setModalFiltroVisible(true)} 
+        >
+          <Filter color={COLORS.textSecondary} size={24} />
+        </TouchableOpacity>
+      </View>
+
+      {/* SWIPER */}
+      <View style={styles.deckSwiperContainer}>
+        <Swiper
+          ref={swiperRef}
+          cards={PLAYER_PROFILES}
+          onSwipedLeft={() => handleNextProfile('Rechazar')}
+          onSwipedRight={() => handleNextProfile('Aceptar')}
+          stackSize={3}
+          stackScale={1}
+          stackSeparation={3}
+          backgroundColor={'transparent'}
+          cardIndex={PLAYER_PROFILES.indexOf(PLAYER_PROFILES.find(p => p.id === currentProfile?.id)) || 0}
+          renderCard={(card) => {
+            if (!card) return null;
+            return <MatchCard card={card} />;
+          }}
+        />
+      </View>
+
+      {/* BOTONES DE ACCIÓN */}
+      <View style={styles.actionButtonsRow}>
+        <View style={styles.actionButtonWrapper}>
+          <TouchableOpacity style={styles.circleActionButtonGlowRed} onPress={() => swiperRef.current?.swipeLeft()}>
+            <X color={COLORS.actionRed} size={32} />
+          </TouchableOpacity>
+          <Text style={styles.actionLabelTextRed}>RECHAZAR</Text>
+        </View>
+
+        <View style={styles.actionButtonWrapper}>
+          <TouchableOpacity 
+            style={styles.circleActionButtonGlowPurple} 
+            onPress={() => {
+              if (currentProfile) {
+                // @ts-ignore
+                router.push(`/perfil?id=${currentProfile.id}`);
+              }
+            }}
+          >
+            <Eye color={COLORS.purple} size={32} />
+          </TouchableOpacity>
+          <Text style={styles.actionLabelTextPurple}>VER PERFIL</Text>
+        </View>
+
+        <View style={styles.actionButtonWrapper}>
+          <TouchableOpacity style={styles.circleActionButtonGlowBlue} onPress={() => swiperRef.current?.swipeRight()}>
+            <Heart color={COLORS.blue} size={32} />
+          </TouchableOpacity>
+          <Text style={styles.actionLabelTextBlue}>ACEPTAR</Text>
+        </View>
+      </View>
+
+      {/* INYECCIÓN DEL MODAL DE FILTRO */}
+      <MatchmakingFilter 
+        isVisible={modalFiltroVisible}
+        onClose={() => setModalFiltroVisible(false)}
+        currentFilters={filtrosActivos}
+        onApply={setFiltrosActivos}
+        resetFilter={resetFilter}
+      />
+
+    </SafeAreaView>
   );
 }
 
-
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, backgroundColor: COLORS.background, paddingTop: 10 },
+  emptyContainer: { justifyContent: 'center', alignItems: 'center', flex: 1 },
+  emptyText: { color: COLORS.blue, fontSize: 16, textAlign: 'center', marginBottom: 20, fontWeight: '600' },
+  resetDemoButton: { padding: 12, backgroundColor: COLORS.purple, borderRadius: 10 },
+  resetDemoText: { color: COLORS.textMain, fontWeight: 'bold' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 15, marginVertical: 10, height: 50 },
+  headerTitleContainer: { alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textMain, letterSpacing: 1 },
+  headerSubtitle: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  headerIconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  
+  deckSwiperContainer: { 
+    flex: 1, 
+    marginTop: -25,
+    marginBottom: 130
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  
+  actionButtonsRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-evenly', 
+    alignItems: 'center', 
+    position: 'absolute', 
+    bottom: 35,
+    zIndex: 100,
+    width: width 
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  
+  actionButtonWrapper: { alignItems: 'center', width: 90 },
+  circleActionButtonGlowRed: { width: 65, height: 65, borderRadius: 32.5, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.actionRed, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6, borderColor: COLORS.actionRed, borderWidth: 1 },
+  actionLabelTextRed: { fontSize: 10, fontWeight: '800', marginTop: 10, letterSpacing: 1, color: COLORS.actionRed },
+  circleActionButtonGlowPurple: { width: 65, height: 65, borderRadius: 32.5, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.purple, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6, borderColor: COLORS.purple, borderWidth: 1 },
+  actionLabelTextPurple: { fontSize: 10, fontWeight: '800', marginTop: 10, letterSpacing: 1, color: COLORS.purple },
+  circleActionButtonGlowBlue: { width: 65, height: 65, borderRadius: 32.5, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.blue, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 6, borderColor: COLORS.blue, borderWidth: 1 },
+  actionLabelTextBlue: { fontSize: 10, fontWeight: '800', marginTop: 10, letterSpacing: 1, color: COLORS.blue },
+
+  // --- ESTILOS NUEVOS PARA EL MODAL DEL FILTRO ---
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'flex-end' },
+  filterContainer: { backgroundColor: COLORS.cardBackground, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, maxHeight: '80%' },
+  filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  filterTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textMain },
+  filterScroll: { marginBottom: 20 },
+  filterCategoryLabel: { fontSize: 14, fontWeight: '600', color: COLORS.blue, marginTop: 15, marginBottom: 10 },
+  pillContainer: { flexDirection: 'row', flexWrap: 'wrap' },
+  pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.textSecondary, marginRight: 10, marginBottom: 10 },
+  pillActive: { backgroundColor: COLORS.purple, borderColor: COLORS.purpleLight },
+  pillText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
+  pillTextActive: { color: COLORS.textMain, fontWeight: 'bold' },
+  filterFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  clearButton: { paddingVertical: 12, paddingHorizontal: 20 },
+  clearButtonText: { color: COLORS.textSecondary, fontWeight: 'bold', fontSize: 14 },
+  applyButton: { backgroundColor: COLORS.blue, paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
+  applyButtonText: { color: COLORS.background, fontWeight: 'bold', fontSize: 14 },
 });
