@@ -45,3 +45,16 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+
+import { iniciarBaseDeDatos, iniciarTablaFeedback } from '../../src/database/db'; // Ajusta la ruta
+
+// Dentro de tu función de inicio...
+const prepararApp = async () => {
+  try {
+    const db = await iniciarBaseDeDatos(); 
+    await iniciarTablaFeedback(db); // <-- Agregas esta línea
+  } catch (error) {
+    console.error(error);
+  }
+};

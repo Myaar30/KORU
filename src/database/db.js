@@ -114,3 +114,80 @@ export const obtenerEquiposDisponibles = async (db) => {
     return [];
   }
 };
+
+// ========================================================
+// 4. MÓDULO DE FEEDBACK Y RESEÑAS (NUEVA FUNCIONALIDAD)
+// ========================================================
+
+/**
+ * Inicializa únicamente la tabla de Feedback.
+ * Debes llamar a esta función pasándole la instancia de la base de datos 
+ * después de haber llamado a tu función original iniciarBaseDeDatos().
+ */
+export const iniciarTablaFeedback = async (db) => {
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS "Feedback_App" (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        usuario_id INTEGER NOT NULL, 
+        estrellas_matches INTEGER CHECK(estrellas_matches >= 1 AND estrellas_matches <= 5), 
+        estrellas_filtros INTEGER CHECK(estrellas_filtros >= 1 AND estrellas_filtros <= 5),
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("Tabla de Feedback verificada/creada con éxito.");
+  } catch (error) {
+    console.error("Error al inicializar la tabla de Feedback: ", error);
+    throw error;
+  }
+};
+
+/**
+ * Guarda la calificación que el usuario le da a la aplicación.
+ * @param {Object} db - Instancia de la base de datos
+ * @param {number} usuarioId - ID del usuario que califica
+ * @param {number} estrellasMatches - Puntuación de 1 a 5 para la relevancia de los matches
+ * @param {number} estrellasFiltros - Puntuación de 1 a 5 para la utilidad de los filtros
+ */
+export const guardarFeedback = async (db, usuarioId, estrellasMatches, estrellasFiltros) => {
+  try {
+    const resultado = await db.runAsync(
+      'INSERT INTO "Feedback_App" (usuario_id, estrellas_matches, estrellas_filtros) VALUES (?, ?, ?)',
+      [usuarioId, estrellasMatches, estrellasFiltros]
+    );
+    return resultado.lastInsertRowId;
+  } catch (error) {
+    console.error("Error al guardar el feedback en la base de datos: ", error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene el promedio de las calificaciones para validar los requerimientos del proyecto.
+ * Retorna un objeto con los promedios y el total de personas que respondieron.
+ */
+export const obtenerMetricasFeedback = async (db) => {
+  try {
+    const metricas = await db.getFirstAsync(`
+      SELECT 
+        AVG(estrellas_matches) as promedio_matches, 
+        AVG(estrellas_filtros) as promedio_filtros,
+        COUNT(id) as total_respuestas
+      FROM "Feedback_App"
+    `);
+    
+    // Si la tabla está vacía, devuelve valores en 0 por defecto
+    if (!metricas || metricas.total_respuestas === 0) {
+      return { promedio_matches: 0, promedio_filtros: 0, total_respuestas: 0 };
+    }
+    
+    return metricas;
+  } catch (error) {
+    console.error("Error al obtener las métricas de feedback: ", error);
+    return { promedio_matches: 0, promedio_filtros: 0, total_respuestas: 0 };
+  }
+};
+
+// ========================================================
+// FIN MÓDULO DE FEEDBACK Y RESEÑAS (NUEVA FUNCIONALIDAD)
+// ========================================================
